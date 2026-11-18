@@ -1,0 +1,73 @@
+{
+ "sampling": [
+  {
+   "device_id": "ios-4f1c2a9e-1b2c-4d3e-8f90-123456789abc",
+   "event": "app_open",
+   "bucket": 0.5258241149131209
+  },
+  {
+   "device_id": "and-1234567890abcdef",
+   "event": "paywall_shown",
+   "bucket": 0.7054598934482783
+  },
+  {
+   "device_id": "tmp-x",
+   "event": "screen_viewed",
+   "bucket": 0.4346250747330487
+  },
+  {
+   "device_id": "ios-00000000-0000-4000-8000-000000000000",
+   "event": "element_tapped",
+   "bucket": 0.6474499327596277
+  }
+ ],
+ "seeds": [
+  {
+   "user_id": "user_1",
+   "seed": 83
+  },
+  {
+   "user_id": "42",
+   "seed": 53
+  },
+  {
+   "user_id": "alice@example.com",
+   "seed": 46
+  },
+  {
+   "user_id": "a6b1f3e2-6d0f-4c35-9b8e-2f9f0f1d2c3b",
+   "seed": 45
+  },
+  {
+   "user_id": "",
+   "seed": 49
+  }
+ ],
+ "versions": [
+  {
+   "a": "1.10.0",
+   "b": "1.9.0",
+   "cmp": 1
+  },
+  {
+   "a": "v2.0",
+   "b": "2.0.0",
+   "cmp": 0
+  },
+  {
+   "a": "1.2.3-beta",
+   "b": "1.2.3",
+   "cmp": 0
+  },
+  {
+   "a": "1.2",
+   "b": "1.2.1",
+   "cmp": -1
+  },
+  {
+   "a": "x",
+   "b": "1",
+   "cmp": null
+  }
+ ]
+}

@@ -1,0 +1,108 @@
+name: PR template
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-template-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Description filled in
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/pull_request_template.md
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const TEMPLATE = '.github/pull_request_template.md';
+            const pr = context.payload.pull_request;
+
+            if (pr.draft) {
+              core.info('Draft pull request, skipping.');
+              return;
+            }
+            if ((pr.user && pr.user.type) === 'Bot') {
+              core.info('Opened by a bot, skipping.');
+              return;
+            }
+            const labels = (pr.labels || []).map(l => String(l.name).toLowerCase());
+            if (labels.includes('skip-template')) {
+              core.info('Labelled skip-template, skipping.');
+              return;
+            }
+            if (!fs.existsSync(TEMPLATE)) {
+              core.info('No template in this repo, nothing to check.');
+              return;
+            }
+
+            const strip = s => String(s).replace(/<!--[\s\S]*?-->/g, '');
+
+            function sections(md) {
+              const out = new Map();
+              let cur = null;
+              for (const line of strip(md).split('\n')) {
+                const m = line.match(/^##\s+(.+?)\s*$/);
+                if (m) {
+                  cur = m[1].trim();
+                  out.set(cur, []);
+                } else if (cur !== null) {
+                  out.get(cur).push(line);
+                }
+              }
+              return out;
+            }
+
+            const template = sections(fs.readFileSync(TEMPLATE, 'utf8'));
+            const body = sections(pr.body || '');
+            const problems = [];
+
+            if (!String(pr.body || '').trim()) {
+              problems.push('The description is empty. Open the template, copy it in, and fill it out.');
+            }
+
+            for (const [heading, lines] of template) {
+              const wantsTick = lines.some(l => /^\s*[-*]\s*\[[ xX]\]/.test(l));
+              if (!body.has(heading)) {
+                problems.push('Missing section: "## ' + heading + '"');
+                continue;
+              }
+              const given = body.get(heading);
+              if (wantsTick) {
+                if (!given.some(l => /^\s*[-*]\s*\[[xX]\]/.test(l))) {
+                  problems.push('Nothing ticked under "' + heading + '".');
+                }
+              } else {
+                const text = given.join('\n').replace(/^\s*[-*+]\s*$/gm, '').trim();
+                if (!text) {
+                  problems.push('"' + heading + '" is empty. Write something, or "N/A" if it does not apply.');
+                }
+              }
+            }
+
+            if (problems.length === 0) {
+              core.summary.addHeading('PR template', 3);
+              core.summary.addRaw('Every required section is filled in.');
+              await core.summary.write();
+              core.info('Template complete.');
+              return;
+            }
+
+            core.summary.addHeading('PR template is incomplete', 3);
+            core.summary.addList(problems);
+            core.summary.addRaw(
+              'Edit the description to fix these. The check reruns on every edit. ' +
+              'Add the "skip-template" label to bypass it for an automated or trivial change.'
+            );
+            await core.summary.write();
+            core.setFailed('PR description is incomplete:\n' + problems.map(p => '  - ' + p).join('\n'));
