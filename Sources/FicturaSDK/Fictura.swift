@@ -15,6 +15,8 @@ import UIKit
 public enum Fictura {
     private static let lock = NSLock()
     private static var instance: Instance?
+    /// A purchase controller set before `configure`, handed to the instance when it starts.
+    private static var earlyPurchaseController: FicturaPurchaseController?
 
     final class Instance {
         let core: FicturaCore
@@ -77,6 +79,8 @@ public enum Fictura {
         let core = FicturaCore(options: options, api: api, store: store, device: DeviceIdentity(keychain: keychain ?? KeychainStore()),
                                transport: transport ?? URLSessionTransport(), now: now, everyEvent: everyEvent)
         let inst = Instance(core: core, options: options)
+        inst.purchaseController = earlyPurchaseController
+        earlyPurchaseController = nil
         instance = inst
         lock.unlock()
 
@@ -237,10 +241,16 @@ public enum Fictura {
     // MARK: Paywalls and placements
 
     /// How paywalls buy. Defaults to StoreKit 2. Set your own (for example a
-    /// RevenueCat-backed one) before the first paywall shows.
+    /// RevenueCat-backed one) before the first paywall shows, before or after `configure`.
     public static var purchaseController: FicturaPurchaseController? {
-        get { current?.purchaseController }
-        set { current?.purchaseController = newValue }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return instance?.purchaseController ?? earlyPurchaseController
+        }
+        set {
+            lock.lock(); defer { lock.unlock() }
+            if let instance { instance.purchaseController = newValue } else { earlyPurchaseController = newValue }
+        }
     }
 
     /// Your terms and privacy URLs, which paywall designs link to.
@@ -341,6 +351,7 @@ public enum Fictura {
     static func resetForTesting() {
         lock.lock()
         instance = nil
+        earlyPurchaseController = nil
         lock.unlock()
     }
 }

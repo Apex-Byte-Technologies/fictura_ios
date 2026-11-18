@@ -68,6 +68,26 @@ final class WrapperTests: XCTestCase {
         XCTAssertEqual(ev["tags"]?["library"], .string("widgets library"))
     }
 
+    /// fictura_flutter sets its purchase handler before Dart calls configure; a
+    /// controller set that early used to be dropped.
+    func testPurchaseControllerSetBeforeConfigureIsKept() {
+        final class Controller: FicturaPurchaseController {
+            func packages(for productIds: [String]) async -> [FicturaPackage] { [] }
+            func purchase(_ package: FicturaPackage, context: FicturaPurchaseContext) async -> FicturaPurchaseResult { .cancelled }
+            func restore() async throws -> Bool { false }
+        }
+        Fictura.resetForTesting()
+        defer { Fictura.resetForTesting() }
+        let controller = Controller()
+        Fictura.purchaseController = controller
+        XCTAssertTrue(Fictura.purchaseController === controller)
+        var o = FicturaOptions(); o.apiBase = URL(string: "https://api.test")!; o.captureErrors = false; o.captureLifecycle = false
+        Fictura.configure(apiKey: "gk_test", options: o, store: MemoryStore(), keychain: MemorySecureStore(), transport: FakeTransport())
+        XCTAssertTrue(Fictura.purchaseController === controller, "kept through configure")
+        Fictura.purchaseController = nil
+        XCTAssertNil(Fictura.purchaseController)
+    }
+
     func testForeignErrorWithoutTypeIsStillSent() throws {
         let t = FakeTransport()
         let core = makeCore(transport: t)
