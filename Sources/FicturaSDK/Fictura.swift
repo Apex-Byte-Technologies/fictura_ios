@@ -34,7 +34,8 @@ public enum Fictura {
             self.core = core
             config = RemoteConfig(core: core)
             placements = Placements(core: core, config: config)
-            errors = ErrorReporter(core: core, release: options.release, environment: options.environment)
+            errors = ErrorReporter(core: core, release: options.release, environment: options.environment,
+                                   wrapper: options.wrapper?.header)
             var lc: Lifecycle!
             let placements = self.placements
             let config = self.config
@@ -71,9 +72,10 @@ public enum Fictura {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let scope = String(Hash.sha256Hex(key).prefix(12))
         let store = store ?? FileStore(scope: scope)
-        let api = API(base: options.apiBase, apiKey: key)
+        let api = API(base: options.apiBase, apiKey: key, wrapper: options.wrapper?.header)
+        let everyEvent = DeviceContext.everyEventProperties().merging(DeviceContext.wrapperProperties(options.wrapper)) { _, w in w }
         let core = FicturaCore(options: options, api: api, store: store, device: DeviceIdentity(keychain: keychain ?? KeychainStore()),
-                               transport: transport ?? URLSessionTransport(), now: now)
+                               transport: transport ?? URLSessionTransport(), now: now, everyEvent: everyEvent)
         let inst = Instance(core: core, options: options)
         instance = inst
         lock.unlock()
@@ -121,7 +123,7 @@ public enum Fictura {
             }
         }
         #endif
-        log("configured \(SDKInfo.header), device \(core.device.deviceId)")
+        log("configured \(SDKInfo.header)\(options.wrapper?.header.map { " (wrapped by \($0))" } ?? ""), device \(core.device.deviceId)")
     }
 
     #if canImport(StoreKit)
@@ -313,6 +315,21 @@ public enum Fictura {
     /// Reports a message to Issues (`level`: info, warning, error, fatal).
     public static func captureMessage(_ message: String, level: String = "error") {
         current?.errors.captureMessage(message, level: level)
+    }
+
+    // MARK: Wrapping SDKs
+
+    /// For SDKs that wrap this one, such as `fictura_flutter`. App code doesn't need these.
+    public enum Wrapper {
+        /// Reports an error raised in the wrapper's own language (a Dart exception), with
+        /// its own type, message and stack text. `runtime` names that language (`dart`),
+        /// so the backend reads the stack's frames. `level`: info, warning, error, fatal.
+        public static func captureError(type: String, message: String?, stack: String?, handled: Bool = true,
+                                        level: String = "error", mechanism: String = "manual", runtime: String,
+                                        properties: [String: Any] = [:]) {
+            current?.errors.captureForeign(type: type, message: message, stack: stack, level: level, handled: handled,
+                                           mechanism: mechanism, runtime: runtime, properties: properties)
+        }
     }
 
     // MARK: Debugging

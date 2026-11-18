@@ -9,6 +9,14 @@ import Network
 /// Properties on every event, with the same keys the React Native SDK sends
 /// (src/deviceContext.ts), so one dashboard reads both.
 enum DeviceContext {
+    /// `$wrapper` and `$wrapper_version` on every event when an SDK such as
+    /// `fictura_flutter` wraps this one; empty otherwise.
+    static func wrapperProperties(_ wrapper: FicturaWrapper?) -> JSONObject {
+        guard let header = wrapper?.header, let slash = header.firstIndex(of: "/") else { return [:] }
+        return ["$wrapper": .string(String(header[..<slash])),
+                "$wrapper_version": .string(String(header[header.index(after: slash)...]))]
+    }
+
     static func everyEventProperties(bundle: Bundle = .main) -> JSONObject {
         var out: JSONObject = ["$lib": .string(SDKInfo.lib), "$lib_version": .string(SDKInfo.version)]
         func put(_ key: String, _ value: String?) { if let value, !value.isEmpty { out[key] = .string(value) } }

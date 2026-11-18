@@ -53,6 +53,8 @@ final class URLSessionTransport: Transport {
 struct API {
     let base: URL
     let apiKey: String
+    /// `x-fictura-wrapper`, when an SDK such as `fictura_flutter` wraps this one.
+    var wrapper: String? = nil
 
     func request(_ path: String, method: String = "GET", query: [String: String?] = [:], body: Data? = nil,
                  deviceId: String? = nil, accountId: String? = nil) -> URLRequest? {
@@ -65,6 +67,7 @@ struct API {
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         r.setValue(SDKInfo.header, forHTTPHeaderField: "x-fictura-sdk")
+        if let wrapper { r.setValue(wrapper, forHTTPHeaderField: "x-fictura-wrapper") }
         if let deviceId { r.setValue(deviceId, forHTTPHeaderField: "X-Device-ID") }
         if let accountId { r.setValue(accountId, forHTTPHeaderField: "X-Account-ID") }
         r.httpBody = body

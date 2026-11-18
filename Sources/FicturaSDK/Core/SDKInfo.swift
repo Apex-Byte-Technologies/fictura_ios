@@ -3,7 +3,7 @@ import Foundation
 /// What this SDK calls itself on the wire.
 enum SDKInfo {
     /// Bump with every release, together with the CHANGELOG.
-    static let version = "0.1.0"
+    static let version = "0.2.0"
     /// `$lib` on every event.
     static let lib = "fictura-ios"
     /// `x-fictura-sdk`: name/version, so the backend can tell it from the React
