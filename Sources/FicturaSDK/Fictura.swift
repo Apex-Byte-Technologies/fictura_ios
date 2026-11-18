@@ -15,6 +15,8 @@ import UIKit
 public enum Fictura {
     private static let lock = NSLock()
     private static var instance: Instance?
+    /// A purchase controller set before `configure`, handed to the instance when it starts.
+    private static var earlyPurchaseController: FicturaPurchaseController?
 
     final class Instance {
         let core: FicturaCore
@@ -34,7 +36,8 @@ public enum Fictura {
             self.core = core
             config = RemoteConfig(core: core)
             placements = Placements(core: core, config: config)
-            errors = ErrorReporter(core: core, release: options.release, environment: options.environment)
+            errors = ErrorReporter(core: core, release: options.release, environment: options.environment,
+                                   wrapper: options.wrapper?.header)
             var lc: Lifecycle!
             let placements = self.placements
             let config = self.config
@@ -71,10 +74,13 @@ public enum Fictura {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let scope = String(Hash.sha256Hex(key).prefix(12))
         let store = store ?? FileStore(scope: scope)
-        let api = API(base: options.apiBase, apiKey: key)
+        let api = API(base: options.apiBase, apiKey: key, wrapper: options.wrapper?.header)
+        let everyEvent = DeviceContext.everyEventProperties().merging(DeviceContext.wrapperProperties(options.wrapper)) { _, w in w }
         let core = FicturaCore(options: options, api: api, store: store, device: DeviceIdentity(keychain: keychain ?? KeychainStore()),
-                               transport: transport ?? URLSessionTransport(), now: now)
+                               transport: transport ?? URLSessionTransport(), now: now, everyEvent: everyEvent)
         let inst = Instance(core: core, options: options)
+        inst.purchaseController = earlyPurchaseController
+        earlyPurchaseController = nil
         instance = inst
         lock.unlock()
 
@@ -121,7 +127,7 @@ public enum Fictura {
             }
         }
         #endif
-        log("configured \(SDKInfo.header), device \(core.device.deviceId)")
+        log("configured \(SDKInfo.header)\(options.wrapper?.header.map { " (wrapped by \($0))" } ?? ""), device \(core.device.deviceId)")
     }
 
     #if canImport(StoreKit)
@@ -235,10 +241,16 @@ public enum Fictura {
     // MARK: Paywalls and placements
 
     /// How paywalls buy. Defaults to StoreKit 2. Set your own (for example a
-    /// RevenueCat-backed one) before the first paywall shows.
+    /// RevenueCat-backed one) before the first paywall shows, before or after `configure`.
     public static var purchaseController: FicturaPurchaseController? {
-        get { current?.purchaseController }
-        set { current?.purchaseController = newValue }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return instance?.purchaseController ?? earlyPurchaseController
+        }
+        set {
+            lock.lock(); defer { lock.unlock() }
+            if let instance { instance.purchaseController = newValue } else { earlyPurchaseController = newValue }
+        }
     }
 
     /// Your terms and privacy URLs, which paywall designs link to.
@@ -315,6 +327,21 @@ public enum Fictura {
         current?.errors.captureMessage(message, level: level)
     }
 
+    // MARK: Wrapping SDKs
+
+    /// For SDKs that wrap this one, such as `fictura_flutter`. App code doesn't need these.
+    public enum Wrapper {
+        /// Reports an error raised in the wrapper's own language (a Dart exception), with
+        /// its own type, message and stack text. `runtime` names that language (`dart`),
+        /// so the backend reads the stack's frames. `level`: info, warning, error, fatal.
+        public static func captureError(type: String, message: String?, stack: String?, handled: Bool = true,
+                                        level: String = "error", mechanism: String = "manual", runtime: String,
+                                        properties: [String: Any] = [:]) {
+            current?.errors.captureForeign(type: type, message: message, stack: stack, level: level, handled: handled,
+                                           mechanism: mechanism, runtime: runtime, properties: properties)
+        }
+    }
+
     // MARK: Debugging
 
     static var debug = false
@@ -324,6 +351,7 @@ public enum Fictura {
     static func resetForTesting() {
         lock.lock()
         instance = nil
+        earlyPurchaseController = nil
         lock.unlock()
     }
 }

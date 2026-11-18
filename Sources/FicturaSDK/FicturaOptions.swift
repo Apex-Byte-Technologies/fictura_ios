@@ -11,6 +11,26 @@ public struct FicturaEvent {
     }
 }
 
+/// The SDK that wraps this one, such as `fictura_flutter`: its name and version.
+/// Set only by that SDK, so the backend can tell its apps apart. App code leaves it nil.
+public struct FicturaWrapper: Equatable {
+    public var name: String
+    public var version: String
+
+    public init(name: String, version: String) {
+        self.name = name
+        self.version = version
+    }
+
+    /// `name/version`, sent as `x-fictura-wrapper`. Characters the backend's version check
+    /// refuses are dropped, so a bad value never costs the whole header.
+    var header: String? {
+        let n = String(name.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }.prefix(20))
+        let v = String(version.filter { $0.isLetter || $0.isNumber || ".+-".contains($0) }.prefix(40))
+        return n.isEmpty || v.isEmpty ? nil : "\(n)/\(v)"
+    }
+}
+
 /// Settings for `Fictura.configure`. Every field has a default that matches
 /// the React Native SDK.
 public struct FicturaOptions {
@@ -45,6 +65,8 @@ public struct FicturaOptions {
     public var sanitizeProperties: ((String, [String: Any]) -> [String: Any])?
     /// Print what the SDK does to the console.
     public var debug = false
+    /// Set by an SDK that wraps this one (`fictura_flutter`). Leave it nil in app code.
+    public var wrapper: FicturaWrapper?
 
     public init() {}
 }

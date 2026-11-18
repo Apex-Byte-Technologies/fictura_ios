@@ -2,7 +2,18 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.1.0] - Unreleased
+## [0.2.0] - Unreleased
+
+For SDKs that wrap this one, starting with `fictura_flutter`. Apps that call the SDK directly see no change.
+
+### Added
+- `FicturaOptions.wrapper` (`FicturaWrapper(name:version:)`): a wrapping SDK names itself. Every request then also carries `x-fictura-wrapper: flutter/0.1.0`, every event `$wrapper` and `$wrapper_version`, and every error `contexts.app.wrapper`. `x-fictura-sdk` stays `ios/…`, so the backend keeps reading Apple stacks and serving HTML paywalls.
+- `Fictura.Wrapper.captureError(type:message:stack:handled:level:mechanism:runtime:properties:)`: reports an error raised in the wrapper's own language (a Dart exception) with its own stack text, marked with `contexts.runtime.name`.
+
+### Fixed
+- A `Fictura.purchaseController` set before `configure` was dropped, so paywalls fell back to StoreKit 2. It is now kept and used once the SDK starts.
+
+## [0.1.0] - 2026-11-17
 
 First release: Fictura for native iOS apps.
 

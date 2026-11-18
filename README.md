@@ -185,6 +185,10 @@ Event names, properties and batching; device ids (an app rewritten from React Na
 - **Onboarding flows** (deprecated in Fictura).
 - Older React Native-only paywall templates (schemas 1 to 4).
 
+## Flutter
+
+Flutter apps use [`fictura_flutter`](https://github.com/Apex-Byte-Technologies/fictura_flutter), which wraps this SDK. It names itself with `FicturaOptions.wrapper` and sends Dart errors through `Fictura.Wrapper.captureError`. Apps never call those two themselves.
+
 ## Development
 
 ```bash

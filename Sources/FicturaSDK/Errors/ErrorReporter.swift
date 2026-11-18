@@ -14,6 +14,8 @@ final class ErrorReporter {
     private let core: FicturaCore
     private let release: String
     private let environment: String
+    /// `x-fictura-wrapper` (`flutter/0.1.0`), repeated in `contexts.app.wrapper`.
+    private let wrapper: String?
     private let lock = NSLock()
     private var pending: [JSONObject]
     private var breadcrumbs: [JSONObject] = []
@@ -22,8 +24,9 @@ final class ErrorReporter {
     private var metricKit: AnyObject?
     #endif
 
-    init(core: FicturaCore, release: String?, environment: String?) {
+    init(core: FicturaCore, release: String?, environment: String?, wrapper: String? = nil) {
         self.core = core
+        self.wrapper = wrapper
         let version = DeviceContext.appVersion() ?? "0"
         let build = DeviceContext.appBuild()
         self.release = release ?? (build.map { "\(version)+\($0)" } ?? version)
@@ -64,11 +67,13 @@ final class ErrorReporter {
         if let session = core.session.currentId(now: core.now()) { e["session_id"] = .string(session) }
         if let screen = core.currentScreen { e["route"] = .string(String(screen.prefix(200))) }
         let ev = DeviceContext.everyEventProperties()
+        var app: JSONObject = ["version": ev["$app_version"] ?? .null, "build": ev["$app_build"] ?? .null, "sdk": .string(SDKInfo.header),
+                               "in_app_modules": .array(Self.inAppModules.map { .string($0) })]
+        if let wrapper { app["wrapper"] = .string(wrapper) }
         e["contexts"] = .object([
             "os": .object(["name": .string("iOS"), "version": ev["$os_version"] ?? .null]),
             "device": .object(["model": ev["$device_model"] ?? .null, "simulator": ev["$is_emulator"] ?? .null]),
-            "app": .object(["version": ev["$app_version"] ?? .null, "build": ev["$app_build"] ?? .null, "sdk": .string(SDKInfo.header),
-                            "in_app_modules": .array(Self.inAppModules.map { .string($0) })]),
+            "app": .object(app),
         ])
         lock.lock()
         if !breadcrumbs.isEmpty { e["breadcrumbs"] = .array(breadcrumbs.map { .object($0) }) }
@@ -99,6 +104,22 @@ final class ErrorReporter {
 
     func captureMessage(_ message: String, level: String) {
         enqueue(baseEvent(excType: "Message", message: message, stack: nil, level: level, mechanism: "manual", handled: true))
+    }
+
+    /// An error raised in a wrapping SDK's own language (a Dart exception from
+    /// `fictura_flutter`): its type, message and stack text, which this SDK can't
+    /// see. `contexts.runtime.name` tells the backend how to read the stack.
+    func captureForeign(type: String, message: String?, stack: String?, level: String, handled: Bool,
+                        mechanism: String, runtime: String, properties: [String: Any] = [:]) {
+        let cleanType = type.trimmingCharacters(in: .whitespacesAndNewlines)
+        var e = baseEvent(excType: cleanType.isEmpty ? "Error" : cleanType, message: message, stack: stack,
+                          level: level, mechanism: String(mechanism.prefix(40)), handled: handled)
+        if case .object(var contexts)? = e["contexts"] {
+            contexts["runtime"] = .object(["name": .string(String(runtime.prefix(40)))])
+            e["contexts"] = .object(contexts)
+        }
+        if !properties.isEmpty { e["tags"] = .object(JSONObject(any: properties)) }
+        enqueue(e)
     }
 
     /// The current thread's frames, demangled, deepest first, without the SDK's own
